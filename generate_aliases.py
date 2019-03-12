@@ -25,8 +25,82 @@ try:
 except NameError:
     xrange = range  # Python 3
 
-
 def main():
+    parts = gen_istioctl()
+    out = gen(parts)
+    out = filter(is_valid, out)
+
+    # prepare output
+    if not sys.stdout.isatty():
+        header_path = \
+            os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                         'license_header')
+        with open(header_path, 'r') as f:
+            print(f.read())
+    for cmd in out:
+        print("alias {}='{}'".format(''.join([a[0] for a in cmd]),
+              ' '.join([a[1] for a in cmd])))
+
+# generate Istio aliases
+def gen_istioctl():
+    cmds = [('i', 'istioctl', None, None)]
+    globs = [('sys', '--namespace=istio-system', None, ['sys'])]
+
+    ops = [
+        ('g', 'get', None, None),
+        ('d', 'delete', None, None),
+        ('ki', 'kube-inject -f', None, None),
+        ('a', 'authn', None, None),
+        ('pc', 'proxy-config', None, None),
+        ('ps', 'proxy-status', None, None),
+    ]
+
+    res = [
+        ('vs', 'virtualservice', ['g', 'd'], None),
+        ('gw', 'gateway', ['g', 'd'], None),
+        ('se', 'serviceentry', ['g', 'd'], None),
+        ('dr', 'destinationrule', ['g', 'd'], None),
+        ('ef', 'envoyfilter', ['g', 'd'], None),
+        ('has', 'httpapispec', ['g', 'd'], None),
+        ('hasb', 'httpapispecbinding', ['g', 'd'], None),
+        ('qs', 'quotaspec', ['g', 'd'], None),
+        ('qsb', 'quotaspecbnding', ['g', 'd'], None),
+        ('p', 'policy', ['g', 'd'], None),
+        ('mp', 'meshpolicy', ['g', 'd'], None),
+        ('sr', 'servicerole', ['g', 'd'], None),
+        ('srb', 'servicerolebinding', ['g', 'd'], None),
+        ('rbc', 'rbc', ['g', 'd'], None),
+        ('b', 'bootstrap', ['pc'], None),
+        ('c', 'cluster', ['pc'], None),
+        ('e', 'endpoint', ['pc'], None),
+        ('l', 'listener', ['pc'], None),
+        ('r', 'route', ['pc'], None),
+    ]
+    res_types = [r[0] for r in res]
+
+    args = [
+        ('oyaml', '-o=yaml', ['g'], ['oshort']),
+        ('oshort', '-o=short', ['g'], ['oyaml']),
+        ('all', '--all-namespaces', ['g', 'd'], ['d', 'f', 'sys']),
+        ]
+
+    # these accept a value, so they need to be at the end and
+    # mutually exclusive within each other.
+    positional_args = [
+        ('f', '--recursive -f', ['g', 'd', 'rm'], res_types + ['all', 'sys']),
+        ('n', '--namespace', ['g', 'd'], ['sys', 'all'])]
+
+    # [(part, optional, take_exactly_one)]
+    return [
+        (cmds, False, True),
+        (globs, True, False),
+        (ops, True, True),
+        (res, True, True),
+        (args, True, False),
+        (positional_args, True, True),
+        ]
+
+def gen_kubectl():
     # (alias, full, allow_when_oneof, incompatible_with)
     cmds = [('k', 'kubectl', None, None)]
 
@@ -76,7 +150,7 @@ def main():
                        'lo', 'ex'], ['ns', 'no', 'sys', 'all'])]
 
     # [(part, optional, take_exactly_one)]
-    parts = [
+    return [
         (cmds, False, True),
         (globs, True, False),
         (ops, True, True),
@@ -84,21 +158,6 @@ def main():
         (args, True, False),
         (positional_args, True, True),
         ]
-
-    out = gen(parts)
-    out = filter(is_valid, out)
-
-    # prepare output
-    if not sys.stdout.isatty():
-        header_path = \
-            os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                         'license_header')
-        with open(header_path, 'r') as f:
-            print(f.read())
-    for cmd in out:
-        print("alias {}='{}'".format(''.join([a[0] for a in cmd]),
-              ' '.join([a[1] for a in cmd])))
-
 
 def gen(parts):
     out = [()]
